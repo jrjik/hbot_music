@@ -1,0 +1,47 @@
+Metadata-Version: 2.4
+Name: hammett
+Version: 1.0.0
+Summary: The framework for rapid development of Telegram bots with a clean and pragmatic design.
+Home-page: https://github.com/cusdeb-com/hammett
+Author: Evgeny Golyshev
+Author-email: eugulixes@gmail.com
+Maintainer: Evgeny Golyshev
+Maintainer-email: eugulixes@gmail.com
+License: Apache License, Version 2.0
+Project-URL: Code, https://github.com/cusdeb-com/hammett
+Project-URL: Tracker, https://github.com/cusdeb-com/hammett/issues
+Keywords: python telegram bot api
+Classifier: Development Status :: 3 - Alpha
+Classifier: Framework :: Hammett
+Classifier: License :: OSI Approved :: Apache License, Version 2.0
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Topic :: Communications :: Chat
+Requires-Python: >=3.10
+License-File: LICENSE
+License-File: AUTHORS.md
+Requires-Dist: aiofiles<=23.1.0
+Requires-Dist: Jinja2==3.1.6
+Requires-Dist: python-telegram-bot[job-queue,webhooks]==21.10
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: home-page
+Dynamic: keywords
+Dynamic: license
+Dynamic: license-file
+Dynamic: maintainer
+Dynamic: maintainer-email
+Dynamic: project-url
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+The framework for rapid development of Telegram bots with a clean and pragmatic design.
