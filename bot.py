@@ -1,47 +1,38 @@
 """The module is a script for running the bot."""
-
+import os
+import requests
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
+from dotenv import load_dotenv
 from hammett.core import Bot, Button, Screen
 from hammett.core.constants import DEFAULT_STATE, RenderConfig, SourceTypes
 from hammett.core.mixins import StartMixin
 from hammett.core.handlers import register_typing_handler
 from hammett.core.handlers import register_button_handler
 
+
 from database import save_user_list  # Импортируем нашу функцию
 from database import get_user_list
-NEXT_SCREEN_DESCRIPTION = (
-    'Good job 😎\n'
-    'Now you see <b>NextScreen</b>. It also has a button. After pressing it, '
-    '<b>StartScreen</b> re-renders into <b>NextScreen</b>.'
-)
+
+load_dotenv()
+
 
 START_SCREEN_DESCRIPTION = (
-    'Welcome to HammettSimpleJumpBot!\n'
+    '🎶 <b>HMusicBot</b>\n'
     '\n'
-    'This is <b>StartScreen</b> and it is a response to the /start command. '
-    'Click the button below to jump to <b>NextScreen</b>.'
+    'Храните список любимых артистов и получайте информацию о новых релизах:\n'
+    '\n'
+    '<i>Выберите действие в меню ниже</i>'
 )
 
 ARTISTLIST_SCREEN_DESCRIPTION = (
-    'Перечисли свой список через пробел'
+    'Перечисли список любимых исполнителей через пробел'
     '\n'
     'Ниже ты можешь вернуться на начальный экран'
 )
 
-class NextScreen(Screen):
-    """The class implements NextScreen, which is always sent as a new message."""
 
-    description = NEXT_SCREEN_DESCRIPTION
 
-    async def add_default_keyboard(self, _update, _context):
-        """Set up the default keyboard for the screen."""
-        return [[
-            Button(
-                '⬅️ Back',
-                StartScreen,
-                source_type=SourceTypes.MOVE_SOURCE_TYPE,
-            ),
-            
-        ]]
 
 class ArtistListEdit(Screen):
 
@@ -50,7 +41,7 @@ class ArtistListEdit(Screen):
     async def add_default_keyboard(self, _update, _context):
         return [[
             Button(
-                '⬅️ Back',
+                '⬅️ Назад',
                 StartScreen,
                 source_type=SourceTypes.MOVE_SOURCE_TYPE,
             ),
@@ -58,14 +49,12 @@ class ArtistListEdit(Screen):
         ]]
     @register_typing_handler
     async def handle_text_input(self, update, context):
-        user_id = update.message.from_user.id  # Получаем ID пользователя
+        user_id = update.message.from_user.id  
         user_text = update.message.text
         items = [item.strip() for item in user_text.split(",")]
         
-        # Сохраняем в БД
         save_user_list(user_id, items)
         
-        # Сообщение пользователю
         await update.message.reply_text(
             f"Список сохранён в базу данных!\n"
             f"Ваш список: {', '.join(items)}"
@@ -80,59 +69,40 @@ class ArtistListEdit(Screen):
                 )],
                 ],
         ))
+    
        
 class ArtistListShow(Screen):
-    description = "Нажмите кнопку, чтобы увидеть ваш список исполнителей"
+    async def get_description(self, update, context, **kwargs):
+        user_id = update.callback_query.from_user.id if update.callback_query else update.message.from_user.id
+        artists = get_user_list(user_id)
+        
+        if not artists:
+            return "🎤 Ваш список исполнителей пуст"
+            
+        artists_list = "\n".join(f"▫️ {artist}" for artist in artists)
+        return f"🎤 Ваши исполнители:\n\n{artists_list}\n\nВсего: {len(artists)}"
 
-    async def add_default_keyboard(self, _update, _context):
+    async def add_default_keyboard(self, update, context):
+        """Создаем клавиатуру с кнопкой возврата"""
         return [
             [
                 Button(
-                    '🎵 Показать моих исполнителей',
-                    source=self.show_artists_handler,  # Указываем обработчик
-                    source_type=SourceTypes.HANDLER_SOURCE_TYPE,
-                ),
-            ],
-            [
-                Button(
-                    '⬅️ Back',
-                    StartScreen,
-                    source_type=SourceTypes.MOVE_SOURCE_TYPE,
+                    '⬅️ В главное меню',
+                    source=StartScreen,
+                    source_type=SourceTypes.MOVE_SOURCE_TYPE
                 )
             ]
         ]
-
-    @register_button_handler
-    async def show_artists_handler(self, update, context):
-        user_id = update.callback_query.from_user.id
-        artists = get_user_list(user_id)  # Функция из database.py
         
-        if not artists:
-            await update.callback_query.answer(
-                "У вас ещё нет сохранённых исполнителей",
-                show_alert=True
-            )
-        else:
-            artists_list = "\n".join(f"▫️ {artist}" for artist in artists)
-            await update.callback_query.edit_message_text(
-                f"🎤 Ваши исполнители:\n\n{artists_list}\n\nВсего: {len(artists)}"
-            )
-        
-        return await self.move(update, context) 
 
 class StartScreen(StartMixin):
-    """The class implements StartScreen, which acts as a response
-    to the /start command.
-    """
-
     description = START_SCREEN_DESCRIPTION
 
     async def add_default_keyboard(self, _update, _context):
-        """Set up the default keyboard for the screen."""
         return [
             [Button(
-                'Next ➡️',
-                NextScreen,
+                'Поиск релизов',
+                ArtistSearch,
                 source_type=SourceTypes.JUMP_SOURCE_TYPE,
             )],
             [Button(
@@ -146,6 +116,89 @@ class StartScreen(StartMixin):
         ]
 
 
+class ArtistSearch(Screen):
+    async def get_description(self, update, context, **kwargs):
+        """Динамическое описание экрана с результатами поиска"""
+        if 'spotify_results' in context.user_data:
+            return self._format_results(context.user_data['spotify_results'])
+        return "Нажмите кнопку для поиска релизов"
+
+    async def add_default_keyboard(self, update, context):
+        """Клавиатура с кнопкой поиска и возврата"""
+        return [
+            [
+                Button(
+                    '🔍 Найти релизы',
+                    source=self.search_releases_handler,
+                    source_type=SourceTypes.HANDLER_SOURCE_TYPE
+                )
+            ],
+            [
+                Button(
+                    '⬅️ Назад',
+                    StartScreen,
+                    source_type=SourceTypes.MOVE_SOURCE_TYPE
+                )
+            ]
+        ]
+
+    @register_button_handler
+    async def search_releases_handler(self, update, context):
+        """Обработчик поиска релизов"""
+        user_id = update.callback_query.from_user.id
+        artists = get_user_list(user_id)  
+        
+        if not artists:
+            await update.callback_query.answer("Нет исполнителей для поиска", show_alert=True)
+            return
+        
+        results = await self._fetch_spotify_data(artists, "2023-11-10")
+        context.user_data['spotify_results'] = results
+        
+        return await self.move(update, context)
+
+    async def _fetch_spotify_data(self, artists, target_date):
+        """Запрос к Spotify API"""
+        client_id = os.getenv('SPOTIFY_CLIENT_ID')
+        client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
+        
+        auth_manager = SpotifyClientCredentials(
+            client_id=client_id,
+            client_secret=client_secret
+        )
+        sp = spotipy.Spotify(auth_manager=auth_manager)
+        
+        results = {}
+        for artist in artists:
+            try:
+                query = f"artist:{artist} year:2023"
+                releases = sp.search(q=query, type='album', limit=10)
+                
+                matched_releases = [
+                    item for item in releases['albums']['items']
+                    if item['release_date'] == target_date
+                ]
+                
+                if matched_releases:
+                    results[artist] = matched_releases
+            except Exception as e:
+                print(f"Ошибка при запросе для {artist}: {e}")
+        
+        return results
+
+    def _format_results(self, results):
+        """Форматирование результатов для вывода"""
+        if not results:
+            return "На указанную дату релизов не найдено"
+            
+        message = "🎵 Найденные релизы (2023-11-10):\n\n"
+        for artist, releases in results.items():
+            message += f"🎤 {artist}:\n"
+            for release in releases:
+                message += f"▫️ {release['name']} ({release['album_type']})\n"
+                message += f"   Ссылка: {release['external_urls']['spotify']}\n\n"
+        
+        return message
     
 def main():
     """Run the bot."""
@@ -153,7 +206,7 @@ def main():
         'HammettSimpleJumpBot',
         entry_point=StartScreen,
         states={
-            DEFAULT_STATE: {NextScreen, StartScreen, ArtistListEdit, ArtistListShow},
+            DEFAULT_STATE: {StartScreen, ArtistListEdit, ArtistListShow, ArtistSearch},
         },
     )
     bot.run()

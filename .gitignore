@@ -8,3 +8,4 @@ __pycache__
 *.env
 .coverage
 *.mo
+user_lists.db

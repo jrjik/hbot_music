@@ -57,7 +57,6 @@ def get_user_list(user_id: int) -> list:
             )
             result = cursor.fetchone()
             if result:
-                # Преобразуем строку обратно в список
                 return result[0].split(", ")
             return []
         except Error as e:
