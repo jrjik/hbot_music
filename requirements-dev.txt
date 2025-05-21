@@ -7,5 +7,9 @@ ruff
 types-aiofiles
 types-redis
 typing_extensions
+spotipy
+dotenv
+import sqlite3
+
 
 -r requirements.txt
